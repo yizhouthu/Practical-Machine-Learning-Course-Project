@@ -1,0 +1,99 @@
+---
+title: "A Project of Maching Learning on Prodicting Exercise Manners"
+author: "Yi Zhou"
+date: "September 11, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+This report is the report of the final project of *Practical Machine Learning* on Coursera. In the report, I use the training data to find an machine learning algorithm to predict people's exercise manners, based on accelerometers on the belt, forearm, arm, and dumbell of 6 participants. Then I apply this algorithm to predict 20 different cases.
+
+## Loading and Preprocessing Data
+First, we download the training data and test data. The data are available at these websites:
+
+- [Training data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+- [Test data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+Please make sure you have downloaded these csv files into your directory, with their original names. Then we read these data in R.
+
+```{r readdata}
+training <- read.csv("pml-training.csv", na.strings = c("#DIV/0", "", "NA"))
+test <- read.csv("pml-testing.csv", na.strings = c("#DIV/0", "", "NA"))
+```
+
+For some variables that contain NA's, we cannot use them in the prediction. Also, there are some variables which obviously have no predicting power. We remove them from both the training set and test set.
+
+```{r removedata}
+rm_col <- 1:7
+for(i in 1:ncol(training)) {
+    if(any(is.na(training[, i])))
+        rm_col <- c(rm_col, i)
+}
+training <- training[, -rm_col]
+test <- test[, -rm_col]
+```
+
+## Cross Validation
+
+### Splitting Data
+
+At first, we split the training set into a training set and a validation set.
+
+```{r splitdata}
+set.seed(64323)
+library(caret)
+inTrain <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+new_training <- training[inTrain, ] 
+validation <- training[-inTrain, ]
+```
+
+Then we use three different methods to train the data, and use validation set to test the accuracy of each method.
+
+### Random Forests
+```{r rf, cache=TRUE}
+set.seed(15634)
+library(randomForest)
+mod_rf <- train(classe ~ ., method = "rf", 
+                trControl=trainControl(method = "cv", number = 4), 
+                data = new_training)
+pred_rf <- predict(mod_rf, validation)
+confusionMatrix(pred_rf, validation$classe)
+```
+
+### Boosting With Trees
+```{r gbm, cache=TRUE}
+set.seed(2312)
+library(gbm)
+mod_gbm <- train(classe ~ ., method = "gbm", data = new_training, verbose = F)
+pred_gbm <- predict(mod_gbm, validation)
+confusionMatrix(pred_gbm, validation$classe)
+```
+
+### Linear Discriminant Analysis
+```{r lda, cache=TRUE}
+set.seed(1874)
+library(MASS)
+mod_lda <- train(classe ~ ., method = "lda", data = new_training)
+pred_lda <- predict(mod_lda, validation)
+confusionMatrix(pred_lda, validation$classe)
+```
+
+### Explanation of Results
+
+From the result, we can see random forests method has the highest accuracy, followed by gbm method. The accuracy of linear discriminant analysis is relatively low. For the measurement of out of sample error, they are 0.0046, 0.0302, 0.2902 for the three methods respectively.
+
+## Prediction
+We use these three algorithm to predict the test set:
+
+```{r predict}
+predict(mod_rf, test)
+predict(mod_gbm, test)
+predict(mod_lda, test)
+```
+
+The results of random forests and boosting are exactly the same. Since these two methods has very high out of sample accuracy (.9954 and .9648 respectively), we use this result as our final prediction for the test set.
